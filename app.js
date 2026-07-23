@@ -12,6 +12,8 @@ function toast(msg) {
 }
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : 'x' + Date.now() + Math.random().toString(16).slice(2));
+// 百度地图搜索外链（按地名生成，手机/电脑均可直接打开导航）
+const mapUrl = (q) => 'https://map.baidu.com/search/' + encodeURIComponent(q || '');
 
 // ---------------- 数据读写 ----------------
 async function loadData() {
@@ -104,6 +106,10 @@ function renderPlan() {
         ${i.place ? '<div class="meta">📍 ' + esc(i.place) + '</div>' : ''}
         ${i.dur ? '<span class="dur">⏱ ' + esc(i.dur) + '</span>' : ''}
         ${i.legs && i.legs.length ? '<div class="legs">🚗 行车预估：' + i.legs.map(l => esc(l.from) + ' → ' + esc(l.to) + '：<b>' + l.km + 'km</b> · 约' + l.min + '分钟').join('；') + '</div>' : ''}
+        ${i.spots && i.spots.length ? '<div class="spots">🧭 景点导航：' + i.spots.map(s => '<span class="spot"><b>' + esc(s.name) + '</b>' +
+            '<a class="spot-link" href="' + mapUrl(s.name) + '" target="_blank" rel="noopener">📍 地图</a>' +
+            (s.ticket ? '<a class="spot-link ticket" href="' + esc(s.ticket) + '" target="_blank" rel="noopener">🎫 购票</a>' : '<span class="spot-free">免费</span>') +
+            '</span>').join('') + '</div>' : ''}
         ${i.note ? '<div class="note">' + esc(i.note).replace(/\n/g, '<br>').replace(/(\d{1,2}:\d{2})/g, '<span class="time">$1</span>') + '</div>' : ''}
       </div>
       <button class="del" data-del-plan="${i.id}">×</button>
@@ -179,6 +185,9 @@ function renderHotel(x) {
       <label>离店<input type="date" class="h-checkout" value="${esc(x.checkout || '')}" /></label>
     </div>
     <div class="h-row">
+      <label class="h-name-label">酒店名称<input type="text" class="h-name" placeholder="订的酒店名（可填空格）" value="${esc(x.name || '')}" /></label>
+    </div>
+    <div class="h-row">
       <label class="h-loc-label">位置<input type="text" class="h-loc" placeholder="酒店/民宿位置" value="${esc(x.location || '')}" /></label>
     </div>
     <div class="h-row">
@@ -191,6 +200,7 @@ function renderHotel(x) {
           <option value="AT" ${sel('AT')}>AT</option>
         </select>
       </label>
+      <button class="h-map" data-map-hotel="${x.id}">📍 地图</button>
       <button class="h-confirm" data-confirm-hotel="${x.id}">确认</button>
     </div>
     ${x.confirmed ? `<div class="h-status">当前负责人：<b>${esc(x.by || '待定')}</b>${x.confirmedAt ? '（' + esc(x.confirmedAt) + '）' : ''}</div>` : ''}
@@ -216,12 +226,20 @@ function renderList() {
     if (!it || !card) return;
     it.checkin = card.querySelector('.h-checkin').value;
     it.checkout = card.querySelector('.h-checkout').value;
+    it.name = card.querySelector('.h-name').value;
     it.location = card.querySelector('.h-loc').value;
     it.by = card.querySelector('.h-by').value;
     it.confirmed = true;
     const d = new Date();
     it.confirmedAt = (d.getMonth() + 1) + '/' + d.getDate() + ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
     await saveData(); renderList(); toast('已确认：' + (it.by || '待定'));
+  });
+  $$('[data-map-hotel]').forEach(b => b.onclick = () => {
+    const card = b.closest('[data-hotel]');
+    if (!card) return;
+    const q = (card.querySelector('.h-loc').value || card.querySelector('.h-name').value || '').trim();
+    if (q) window.open(mapUrl(q), '_blank', 'noopener');
+    else toast('请先填写酒店位置或名称');
   });
 }
 

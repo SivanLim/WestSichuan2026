@@ -140,6 +140,9 @@ main { padding: 14px; max-width: 720px; margin: 0 auto; }
 .h-row input[type=date] { flex: 1; min-width: 120px; }
 .h-loc-label { flex: 1 1 100%; }
 .h-loc-label .h-loc { flex: 1; width: 100%; }
+.h-name-label { flex: 1 1 100%; }
+.h-name-label .h-name { flex: 1; width: 100%; }
+.h-map { padding: 8px 14px; border: 1px solid var(--line); border-radius: 10px; background: transparent; color: var(--accent); font-size: 13px; cursor: pointer; }
 .h-confirm { padding: 8px 16px; border: none; border-radius: 10px; background: var(--accent); color: #fff; font-weight: 600; font-size: 13px; cursor: pointer; }
 .h-status { margin-top: 8px; font-size: 12px; color: var(--muted); }
 .h-status b { color: var(--green); }
@@ -147,6 +150,14 @@ main { padding: 14px; max-width: 720px; margin: 0 auto; }
 /* 行车预估 */
 .legs { margin-top: 6px; font-size: 12px; color: #5a554c; background: #f3f6f9; border-radius: 10px; padding: 6px 10px; line-height: 1.7; }
 .legs b { color: #2b6cb0; }
+
+/* 景点导航 */
+.spots { margin-top: 6px; font-size: 12px; color: #5a554c; background: #f3f6f9; border-radius: 10px; padding: 6px 10px; line-height: 1.9; }
+.spot { display: inline-block; margin: 2px 12px 2px 0; }
+.spot b { color: var(--ink); }
+.spot-link { display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: 8px; background: var(--accent-soft); color: var(--accent); text-decoration: none; font-size: 12px; }
+.spot-link.ticket { background: #eaf3fb; color: #2b6cb0; }
+.spot-free { margin-left: 6px; font-size: 11px; color: var(--green); }
 
 /* notes */
 .notes-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
