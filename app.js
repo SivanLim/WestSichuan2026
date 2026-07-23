@@ -45,6 +45,7 @@ function subscribeRealtime() {
 
 // ---------------- 登录（仅云端模式） ----------------
 async function enter() {
+  if (!sb) { $('#loginErr').textContent = '⚠️ 云端未连接，请刷新页面重试（若反复出现，检查 config.js 配置）'; return; }
   const email = CFG.LOGIN_EMAIL || 'travel@example.com';
   const password = $('#pw').value;
   if (!password) { $('#loginErr').textContent = '请输入密码'; return; }
@@ -168,8 +169,9 @@ function renderList() {
 // ---------------- 注意事项 ----------------
 const NOTE_MAP = { nWeather: 'weather', nTemp: 'temperature', nCloth: 'clothing', nMed: 'medication' };
 Object.entries(NOTE_MAP).forEach(([id, field]) => {
-  $(id).addEventListener('change', async () => {
-    DATA.notes[field] = $(id).value; await saveData(); toast('已保存');
+  const el = $(id);
+  if (el) el.addEventListener('change', async () => {
+    DATA.notes[field] = el.value; await saveData(); toast('已保存');
   });
 });
 function renderNotes() {
@@ -198,12 +200,23 @@ function renderAll() {
 // ---------------- 启动 ----------------
 (async function init() {
   if (CFG.SUPABASE_URL && CFG.SUPABASE_ANON_KEY && window.supabase) {
-    mode = 'supabase';
-    sb = window.supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY);
-    $('#loginEmail').textContent = CFG.LOGIN_EMAIL || 'travel@example.com';
-    $('#modeHint').textContent = '云端四人共享模式';
-    const { data: { session } } = await sb.auth.getSession();
-    if (session) onLoggedIn();
+    try {
+      sb = window.supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY);
+      // 验证客户端是否真的创建成功（有 auth 方法）
+      if (!sb || !sb.auth) throw new Error('Supabase 客户端创建失败');
+      mode = 'supabase';
+      $('#loginEmail').textContent = CFG.LOGIN_EMAIL || 'travel@example.com';
+      $('#modeHint').textContent = '云端四人共享模式';
+      const { data: { session } } = await sb.auth.getSession();
+      if (session) onLoggedIn();
+    } catch (e) {
+      console.error('云端模式初始化失败，回退到本地模式：', e);
+      mode = 'local';
+      $('#login').classList.add('hidden');
+      $('#app').classList.remove('hidden');
+      $('#modeHint').textContent = '⚠️ 云端连接失败，已切换到本机预览模式';
+      loadData();
+    }
   } else {
     mode = 'local';
     $('#login').classList.add('hidden');
