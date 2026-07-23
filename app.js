@@ -95,7 +95,8 @@ function renderPlan() {
       <div class="body">
         <div class="title">${esc(i.title)} ${i.date ? '<span class="tag">' + esc(i.date) + (i.time ? ' ' + esc(i.time) : '') + '</span>' : ''}</div>
         ${i.place ? '<div class="meta">📍 ' + esc(i.place) + '</div>' : ''}
-        ${i.note ? '<div class="note">' + esc(i.note).replace(/\n/g, '<br>') + '</div>' : ''}
+        ${i.dur ? '<span class="dur">⏱ ' + esc(i.dur) + '</span>' : ''}
+        ${i.note ? '<div class="note">' + esc(i.note).replace(/\n/g, '<br>').replace(/(\d{1,2}:\d{2})/g, '<span class="time">$1</span>') + '</div>' : ''}
       </div>
       <button class="del" data-del-plan="${i.id}">×</button>
     </div>`).join('') || '<p class="meta">还没有安排，加一条吧。</p>';
@@ -115,21 +116,22 @@ function renderMoney() {
   const N = Math.max(1, parseInt($('#splitN').value) || 4);
   const ex = DATA.expenses;
   const total = ex.reduce((s, x) => s + (+x.amount || 0), 0);
-  const bal = {};
-  ex.forEach(x => { const amt = +x.amount || 0; bal[x.who] = (bal[x.who] || 0) + amt - amt / N; });
-  let creditors = Object.entries(bal).filter(([_, v]) => v > 0.01).map(([k, v]) => ({ k, v })).sort((a, b) => b.v - a.v);
-  let debtors = Object.entries(bal).filter(([_, v]) => v < -0.01).map(([k, v]) => ({ k, v: -v })).sort((a, b) => b.v - a.v);
-  const lines = [];
-  while (creditors.length && debtors.length) {
-    const c = creditors[0], d = debtors[0];
-    const pay = Math.min(c.v, d.v);
-    lines.push(`<div>${esc(d.k)} 应付 <b>${pay.toFixed(2)}</b> 给 ${esc(c.k)}</div>`);
-    c.v -= pay; d.v -= pay;
-    if (c.v <= 0.01) creditors.shift();
-    if (d.v <= 0.01) debtors.shift();
+  const P = ex.filter(x => x.who === '胖胖').reduce((s, x) => s + (+x.amount || 0), 0);
+  const H = ex.filter(x => x.who === '华老师').reduce((s, x) => s + (+x.amount || 0), 0);
+  const share = total / N;
+  const diff = P - H; // >0 表示胖胖多付
+  let settleHtml;
+  if (Math.abs(diff) < 0.01) {
+    settleHtml = '<div class="ok">已结清 🎉 两人付得一样多</div>';
+  } else if (diff > 0) {
+    settleHtml = `<div>华老师 应付 <b>¥${(diff / 2).toFixed(2)}</b> 给 胖胖</div><div class="muted">（胖胖多付的部分，两人互相抵消后的净额）</div>`;
+  } else {
+    settleHtml = `<div>胖胖 应付 <b>¥${(-diff / 2).toFixed(2)}</b> 给 华老师</div><div class="muted">（华老师多付的部分，两人互相抵消后的净额）</div>`;
   }
-  $('#settle').innerHTML = `<h3>AA 结算（平分 ${N} 人，合计 ${total.toFixed(2)}）</h3>` +
-    (lines.length ? lines.join('') : '<div class="ok">已结清 🎉</div>');
+  $('#settle').innerHTML = `<h3>实时结算（平分 ${N} 人 · 合计 ¥${total.toFixed(2)}）</h3>` +
+    `<div>胖胖 已付 <b>¥${P.toFixed(2)}</b> ｜ 华老师 已付 <b>¥${H.toFixed(2)}</b></div>` +
+    `<div class="muted">每人应承担 ¥${share.toFixed(2)}</div>` +
+    `<hr class="sline">` + settleHtml;
   $('#moneyList').innerHTML = ex.slice().reverse().map(x => `<div class="card">
       <div class="body">
         <div class="title">${esc(x.currency)}${esc(x.amount)} · ${esc(x.what || '—')}</div>
@@ -166,35 +168,9 @@ function renderList() {
   });
 }
 
-// ---------------- 注意事项 ----------------
-const NOTE_MAP = { nWeather: 'weather', nTemp: 'temperature', nCloth: 'clothing', nMed: 'medication' };
-Object.entries(NOTE_MAP).forEach(([id, field]) => {
-  const el = $(id);
-  if (el) el.addEventListener('change', async () => {
-    DATA.notes[field] = el.value; await saveData(); toast('已保存');
-  });
-});
-function renderNotes() {
-  for (const [id, field] of Object.entries(NOTE_MAP)) {
-    const el = $(id);
-    if (document.activeElement !== el) el.value = DATA.notes[field] || '';   // 不在编辑时才回填，避免打断输入
-  }
-  $('#customList').innerHTML = DATA.notes.custom.map((c, i) => `<div class="card">
-      <div class="body"><div class="title">${esc(c)}</div></div>
-      <button class="del" data-del-custom="${i}">×</button>
-    </div>`).join('') || '<p class="meta">暂无。</p>';
-  $$('[data-del-custom]').forEach(b => b.onclick = async () => {
-    DATA.notes.custom.splice(+b.dataset.delCustom, 1); await saveData(); renderNotes();
-  });
-}
-$('#customForm').onsubmit = async (e) => {
-  e.preventDefault(); const f = e.target;
-  DATA.notes.custom.push(f.text.value); f.reset(); await saveData(); renderNotes(); toast('已添加');
-};
-
 // ---------------- 渲染入口 ----------------
 function renderAll() {
-  renderPlan(); renderMoney(); renderList(); renderNotes();
+  renderPlan(); renderMoney(); renderList();
 }
 
 // ---------------- 启动 ----------------
