@@ -217,6 +217,11 @@ function renderAll() {
       $('#modeHint').textContent = '⚠️ 云端连接失败，已切换到本机预览模式';
       loadData();
     }
+  } else if (CFG.SUPABASE_URL && CFG.SUPABASE_ANON_KEY) {
+    // 已配置云端，但 Supabase 库没加载成功（如网络拦截）
+    $('#modeHint').textContent = '⚠️ 云端组件未加载';
+    $('#loginErr').textContent = '云端组件加载失败，请下拉刷新页面后重试';
+    // 保留登录页，不静默进入本地模式
   } else {
     mode = 'local';
     $('#login').classList.add('hidden');
