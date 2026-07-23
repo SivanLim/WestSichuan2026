@@ -73,6 +73,13 @@ $('#logoutBtn').onclick = async () => {
   if (mode === 'supabase') await sb.auth.signOut();
   location.reload();
 };
+$('#resetBtn').onclick = async () => {
+  if (!confirm('确定把全部内容（行程 / 费用 / 待办清单）恢复为默认初始值吗？\n此操作会覆盖当前云端已填内容，包括之前测试乱填的数据，且无法撤销。')) return;
+  DATA = clone(window.SEED_DATA);
+  const ok = await saveData();
+  if (ok) { renderAll(); toast('已重置为默认（测试数据已清除）'); }
+  else toast('重置失败，请重试');
+};
 
 // ---------------- tabs ----------------
 $$('.tab').forEach(t => t.onclick = () => {
@@ -96,6 +103,7 @@ function renderPlan() {
         <div class="title">${esc(i.title)} ${i.date ? '<span class="tag">' + esc(i.date) + (i.time ? ' ' + esc(i.time) : '') + '</span>' : ''}</div>
         ${i.place ? '<div class="meta">📍 ' + esc(i.place) + '</div>' : ''}
         ${i.dur ? '<span class="dur">⏱ ' + esc(i.dur) + '</span>' : ''}
+        ${i.legs && i.legs.length ? '<div class="legs">🚗 行车预估：' + i.legs.map(l => esc(l.from) + ' → ' + esc(l.to) + '：<b>' + l.km + 'km</b> · 约' + l.min + '分钟').join('；') + '</div>' : ''}
         ${i.note ? '<div class="note">' + esc(i.note).replace(/\n/g, '<br>').replace(/(\d{1,2}:\d{2})/g, '<span class="time">$1</span>') + '</div>' : ''}
       </div>
       <button class="del" data-del-plan="${i.id}">×</button>
@@ -147,24 +155,73 @@ function renderMoney() {
 // ---------------- 清单 ----------------
 $('#listForm').onsubmit = async (e) => {
   e.preventDefault(); const f = e.target;
-  DATA.checklist.push({ id: uid(), text: f.text.value, by: f.by.value, done: false });
+  DATA.checklist.push({ id: uid(), type: 'todo', text: f.text.value, by: f.by.value, done: false });
   f.reset(); await saveData(); renderList(); toast('已添加');
 };
-function renderList() {
-  const done = DATA.checklist.filter(x => x.done).length;
-  $('#listBox').innerHTML = `<div class="meta" style="margin-bottom:6px">已完成 ${done}/${DATA.checklist.length}</div>` +
-    DATA.checklist.map(x => `<div class="check-item ${x.done ? 'done' : ''}">
+function renderTodo(x) {
+  return `<div class="check-item ${x.done ? 'done' : ''}">
       <input type="checkbox" ${x.done ? 'checked' : ''} data-check="${x.id}" />
       <span class="txt">${esc(x.text)}</span>
       ${x.by ? `<span class="by">${esc(x.by)}</span>` : ''}
       <button class="del" data-del-list="${x.id}">×</button>
-    </div>`).join('') || '<p class="meta">清单是空的。</p>';
+    </div>`;
+}
+function renderHotel(x) {
+  const sel = (v) => v === x.by ? 'selected' : '';
+  return `<div class="hotel ${x.confirmed ? 'confirmed' : ''}" data-hotel="${x.id}">
+    <div class="h-top">
+      <span class="h-label">🏨 ${esc(x.label)}</span>
+      ${x.confirmed ? '<span class="h-ok">✅ 已确认</span>' : '<span class="h-wait">⏳ 待确认</span>'}
+      <button class="del" data-del-list="${x.id}">×</button>
+    </div>
+    <div class="h-row">
+      <label>入住<input type="date" class="h-checkin" value="${esc(x.checkin || '')}" /></label>
+      <label>离店<input type="date" class="h-checkout" value="${esc(x.checkout || '')}" /></label>
+    </div>
+    <div class="h-row">
+      <label class="h-loc-label">位置<input type="text" class="h-loc" placeholder="酒店/民宿位置" value="${esc(x.location || '')}" /></label>
+    </div>
+    <div class="h-row">
+      <label>负责人
+        <select class="h-by">
+          <option value="" ${sel('')}>待定</option>
+          <option value="胖胖" ${sel('胖胖')}>胖胖</option>
+          <option value="Leo" ${sel('Leo')}>Leo</option>
+          <option value="华老师" ${sel('华老师')}>华老师</option>
+          <option value="AT" ${sel('AT')}>AT</option>
+        </select>
+      </label>
+      <button class="h-confirm" data-confirm-hotel="${x.id}">确认</button>
+    </div>
+    ${x.confirmed ? `<div class="h-status">当前负责人：<b>${esc(x.by || '待定')}</b>${x.confirmedAt ? '（' + esc(x.confirmedAt) + '）' : ''}</div>` : ''}
+  </div>`;
+}
+function renderList() {
+  const todos = DATA.checklist.filter(x => x.type !== 'hotel');
+  const done = todos.filter(x => x.done).length;
+  $('#listBox').innerHTML =
+    (todos.length ? `<div class="meta" style="margin-bottom:6px">普通待办已完成 ${done}/${todos.length}</div>` : '') +
+    DATA.checklist.map(x => x.type === 'hotel' ? renderHotel(x) : renderTodo(x)).join('') || '<p class="meta">清单是空的。</p>';
   $$('[data-check]').forEach(c => c.onchange = async () => {
     const it = DATA.checklist.find(x => x.id === c.dataset.check); if (it) it.done = c.checked;
     await saveData(); renderList();
   });
   $$('[data-del-list]').forEach(b => b.onclick = async () => {
     DATA.checklist = DATA.checklist.filter(x => x.id !== b.dataset.delList); await saveData(); renderList();
+  });
+  $$('[data-confirm-hotel]').forEach(b => b.onclick = async () => {
+    const id = b.dataset.confirmHotel;
+    const card = b.closest('[data-hotel]');
+    const it = DATA.checklist.find(x => x.id === id);
+    if (!it || !card) return;
+    it.checkin = card.querySelector('.h-checkin').value;
+    it.checkout = card.querySelector('.h-checkout').value;
+    it.location = card.querySelector('.h-loc').value;
+    it.by = card.querySelector('.h-by').value;
+    it.confirmed = true;
+    const d = new Date();
+    it.confirmedAt = (d.getMonth() + 1) + '/' + d.getDate() + ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+    await saveData(); renderList(); toast('已确认：' + (it.by || '待定'));
   });
 }
 

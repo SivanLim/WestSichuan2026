@@ -77,6 +77,10 @@
 
       <!-- 待办清单 -->
       <section class="panel" id="list">
+        <div class="list-bar">
+          <span class="list-hint">酒店预订请指定负责人并点「确认」（可重复修改）</span>
+          <button id="resetBtn" type="button" class="ghost danger">重置为默认</button>
+        </div>
         <form id="listForm" class="row-form">
           <input name="text" placeholder="要带 / 要做的事" required />
           <select name="by">
@@ -96,9 +100,9 @@
 
   <div id="toast" class="toast"></div>
 
-  <script src="supabase.min.js?v=3"></script>
-  <script src="config.js?v=3"></script>
-  <script src="seed-data.js?v=3"></script>
-  <script src="app.js?v=3"></script>
+  <script src="supabase.min.js?v=4"></script>
+  <script src="config.js?v=4"></script>
+  <script src="seed-data.js?v=4"></script>
+  <script src="app.js?v=4"></script>
 </body>
 </html>
