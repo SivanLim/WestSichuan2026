@@ -12,8 +12,23 @@ function toast(msg) {
 }
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : 'x' + Date.now() + Math.random().toString(16).slice(2));
-// 百度地图搜索外链（按地名生成，手机/电脑均可直接打开导航）
-const mapUrl = (q) => 'https://map.baidu.com/search/' + encodeURIComponent(q || '');
+
+// 📋 复制文本到剪贴板
+function copyText(text, label) {
+  if (!text) { toast('没有可复制的内容'); return; }
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(() => toast('已复制：' + (label || text))).catch(() => fallbackCopy(text, label));
+  } else {
+    fallbackCopy(text, label);
+  }
+}
+function fallbackCopy(text, label) {
+  const ta = document.createElement('textarea');
+  ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+  document.body.appendChild(ta); ta.select();
+  try { document.execCommand('copy'); toast('已复制：' + (label || text)); } catch(e) { toast('复制失败，请手动选择复制'); }
+  document.body.removeChild(ta);
+}
 
 // ---------------- 数据读写 ----------------
 async function loadData() {
@@ -25,6 +40,8 @@ async function loadData() {
     const raw = localStorage.getItem('travel-data');
     DATA = raw ? JSON.parse(raw) : clone(window.SEED_DATA);
   }
+  // 兼容：旧数据缺少 tickets 字段时补上
+  if (!DATA.tickets) DATA.tickets = clone(window.SEED_DATA.tickets || []);
   renderAll();
 }
 async function saveData() {
@@ -52,7 +69,6 @@ async function enter() {
   const password = $('#pw').value;
   if (!password) { $('#loginErr').textContent = '请输入密码'; return; }
   $('#loginBtn').disabled = true;
-  // 先尝试登录；若账号还不存在（首人使用），自动注册
   let { error } = await sb.auth.signInWithPassword({ email, password });
   if (error && /Invalid login credentials/.test(error.message)) {
     const r2 = await sb.auth.signUp({ email, password });
@@ -76,7 +92,7 @@ $('#logoutBtn').onclick = async () => {
   location.reload();
 };
 $('#resetBtn').onclick = async () => {
-  if (!confirm('确定把全部内容（行程 / 费用 / 待办清单）恢复为默认初始值吗？\n此操作会覆盖当前云端已填内容，包括之前测试乱填的数据，且无法撤销。')) return;
+  if (!confirm('确定把全部内容（行程 / 费用 / 待办清单 / 门票预订）恢复为默认初始值吗？\n此操作会覆盖当前云端已填内容，包括之前测试乱填的数据，且无法撤销。')) return;
   DATA = clone(window.SEED_DATA);
   const ok = await saveData();
   if (ok) { renderAll(); toast('已重置为默认（测试数据已清除）'); }
@@ -90,6 +106,30 @@ $$('.tab').forEach(t => t.onclick = () => {
   t.classList.add('active');
   $('#' + t.dataset.tab).classList.add('active');
 });
+
+// ---------------- SVG 路线示意图生成 ----------------
+function buildRouteSvg(legs) {
+  if (!legs || !legs.length) return '';
+  const W = 320, H = legs.length * 36 + 20;
+  let dots = [], lines = [];
+  let y = 24;
+  for (let i = 0; i < legs.length; i++) {
+    const l = legs[i];
+    const x1 = 30, x2 = W - 30;
+    dots.push(`<circle cx="${x1}" cy="${y}" r="6" fill="#3b82f6" stroke="#fff" stroke-width="2"/>`);
+    dots.push(`<circle cx="${x2}" cy="${y}" r="6" fill="#ef4444" stroke="#fff" stroke-width="2"/>`);
+    lines.push(`<line x1="${x1+8}" y1="${y}" x2="${x2-8}" y2="${y}" stroke="#94a3b8" stroke-width="2" stroke-dasharray="6,4"/>`);
+    // arrow at end
+    lines.push(`<polygon points="${x2-10},${y-4} ${x2},${y} ${x2-10},${y+4}" fill="#94a3b8"/>`);
+    // labels
+    dots.push(`<text x="${x1}" y="${y-10}" text-anchor="middle" font-size="11" fill="#3b82f6" font-weight="600">${esc(l.from)}</text>`);
+    dots.push(`<text x="${x2}" y="${y-10}" text-anchor="middle" font-size="11" fill="#ef4444" font-weight="600">${esc(l.to)}</text>`);
+    // distance
+    dots.push(`<text x="${(x1+x2)/2}" y="${y-4}" text-anchor="middle" font-size="10" fill="#64748b">${l.km}km · ${l.min}分钟</text>`);
+    y += 36;
+  }
+  return `<svg viewBox="0 0 ${W} ${H}" class="route-svg" xmlns="http://www.w3.org/2000/svg">${lines.join('')}${dots.join('')}</svg>`;
+}
 
 // ---------------- 行程 ----------------
 $('#planForm').onsubmit = async (e) => {
@@ -106,16 +146,28 @@ function renderPlan() {
         ${i.place ? '<div class="meta">📍 ' + esc(i.place) + '</div>' : ''}
         ${i.dur ? '<span class="dur">⏱ ' + esc(i.dur) + '</span>' : ''}
         ${i.legs && i.legs.length ? '<div class="legs">🚗 行车预估：' + i.legs.map(l => esc(l.from) + ' → ' + esc(l.to) + '：<b>' + l.km + 'km</b> · 约' + l.min + '分钟').join('；') + '</div>' : ''}
-        ${i.spots && i.spots.length ? '<div class="spots">🧭 景点导航：' + i.spots.map(s => '<span class="spot"><b>' + esc(s.name) + '</b>' +
-            '<a class="spot-link" href="' + mapUrl(s.name) + '" target="_blank" rel="noopener">📍 地图</a>' +
+        ${i.spots && i.spots.length ? '<div class="spots">' + i.spots.map(s =>
+            '<span class="spot"><b>' + esc(s.name) + '</b>' +
+            '<button class="copy-btn" data-copy="' + encodeURIComponent(s.copyText || s.name) + '" title="复制名称去百度地图搜">📋 复制</button>' +
             (s.ticket ? '<a class="spot-link ticket" href="' + esc(s.ticket) + '" target="_blank" rel="noopener">🎫 购票</a>' : '<span class="spot-free">免费</span>') +
-            '</span>').join('') + '</div>' : ''}
+            '</span>'
+          ).join('') + '</div>' : ''}
+        ${buildRouteSvg(i.legs)}
+        ${(i.sunset || i.weather || i.clothing) ? '<div class="info-bar">' +
+          (i.sunset ? '<div class="info-item">🌅 日落 <b>' + esc(i.sunset) + '</b></div>' : '') +
+          (i.weather ? '<div class="info-item">🌤️ 天气 <b>' + esc(i.weather) + '</b></div>' : '') +
+          (i.clothing ? '<div class="info-item">👕 穿搭 <b>' + esc(i.clothing) + '</b></div>' : '') +
+          '</div>' : ''}
         ${i.note ? '<div class="note">' + esc(i.note).replace(/\n/g, '<br>').replace(/(\d{1,2}:\d{2})/g, '<span class="time">$1</span>') + '</div>' : ''}
       </div>
       <button class="del" data-del-plan="${i.id}">×</button>
     </div>`).join('') || '<p class="meta">还没有安排，加一条吧。</p>';
   $$('[data-del-plan]').forEach(b => b.onclick = async () => {
     DATA.itinerary = DATA.itinerary.filter(x => x.id !== b.dataset.delPlan); await saveData(); renderPlan();
+  });
+  // 绑定复制按钮
+  $$('[data-copy]').forEach(btn => btn.onclick = () => {
+    copyText(decodeURIComponent(btn.dataset.copy), decodeURIComponent(btn.dataset.copy));
   });
 }
 
@@ -130,20 +182,20 @@ function renderMoney() {
   const N = Math.max(1, parseInt($('#splitN').value) || 4);
   const ex = DATA.expenses;
   const total = ex.reduce((s, x) => s + (+x.amount || 0), 0);
-  const P = ex.filter(x => x.who === '胖胖').reduce((s, x) => s + (+x.amount || 0), 0);
+  const P = ex.filter(x => x.who === '胖哥').reduce((s, x) => s + (+x.amount || 0), 0);
   const H = ex.filter(x => x.who === '华老师').reduce((s, x) => s + (+x.amount || 0), 0);
   const share = total / N;
-  const diff = P - H; // >0 表示胖胖多付
+  const diff = P - H;
   let settleHtml;
   if (Math.abs(diff) < 0.01) {
     settleHtml = '<div class="ok">已结清 🎉 两人付得一样多</div>';
   } else if (diff > 0) {
-    settleHtml = `<div>华老师 应付 <b>¥${(diff / 2).toFixed(2)}</b> 给 胖胖</div><div class="muted">（胖胖多付的部分，两人互相抵消后的净额）</div>`;
+    settleHtml = `<div>华老师 应付 <b>¥${(diff / 2).toFixed(2)}</b> 给 胖哥</div><div class="muted">（胖哥多付的部分，两人互相抵消后的净额）</div>`;
   } else {
-    settleHtml = `<div>胖胖 应付 <b>¥${(-diff / 2).toFixed(2)}</b> 给 华老师</div><div class="muted">（华老师多付的部分，两人互相抵消后的净额）</div>`;
+    settleHtml = `<div>胖哥 应付 <b>¥${(-diff / 2).toFixed(2)}</b> 给 华老师</div><div class="muted">（华老师多付的部分，两人互相抵消后的净额）</div>`;
   }
   $('#settle').innerHTML = `<h3>实时结算（平分 ${N} 人 · 合计 ¥${total.toFixed(2)}）</h3>` +
-    `<div>胖胖 已付 <b>¥${P.toFixed(2)}</b> ｜ 华老师 已付 <b>¥${H.toFixed(2)}</b></div>` +
+    `<div>胖哥 已付 <b>¥${P.toFixed(2)}</b> ｜ 华老师 已付 <b>¥${H.toFixed(2)}</b></div>` +
     `<div class="muted">每人应承担 ¥${share.toFixed(2)}</div>` +
     `<hr class="sline">` + settleHtml;
   $('#moneyList').innerHTML = ex.slice().reverse().map(x => `<div class="card">
@@ -174,6 +226,7 @@ function renderTodo(x) {
 }
 function renderHotel(x) {
   const sel = (v) => v === x.by ? 'selected' : '';
+  const hotelSummary = (x.name || '___') + ' ' + (x.location || '');
   return `<div class="hotel ${x.confirmed ? 'confirmed' : ''}" data-hotel="${x.id}">
     <div class="h-top">
       <span class="h-label">🏨 ${esc(x.label)}</span>
@@ -190,17 +243,20 @@ function renderHotel(x) {
     <div class="h-row">
       <label class="h-loc-label">位置<input type="text" class="h-loc" placeholder="酒店/民宿位置" value="${esc(x.location || '')}" /></label>
     </div>
+    <div class="h-row h-summary-row">
+      <span class="h-summary" id="summary-${x.id}">${esc(hotelSummary)}</span>
+      <button class="copy-btn h-copy-btn" data-hotel-copy="${x.id}" title="复制酒店信息去百度地图搜">📋 复制</button>
+    </div>
     <div class="h-row">
       <label>负责人
         <select class="h-by">
           <option value="" ${sel('')}>待定</option>
-          <option value="胖胖" ${sel('胖胖')}>胖胖</option>
+          <option value="胖哥" ${sel('胖哥')}>胖哥</option>
           <option value="Leo" ${sel('Leo')}>Leo</option>
           <option value="华老师" ${sel('华老师')}>华老师</option>
           <option value="AT" ${sel('AT')}>AT</option>
         </select>
       </label>
-      <button class="h-map" data-map-hotel="${x.id}">📍 地图</button>
       <button class="h-confirm" data-confirm-hotel="${x.id}">确认</button>
     </div>
     ${x.confirmed ? `<div class="h-status">当前负责人：<b>${esc(x.by || '待定')}</b>${x.confirmedAt ? '（' + esc(x.confirmedAt) + '）' : ''}</div>` : ''}
@@ -234,18 +290,63 @@ function renderList() {
     it.confirmedAt = (d.getMonth() + 1) + '/' + d.getDate() + ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
     await saveData(); renderList(); toast('已确认：' + (it.by || '待定'));
   });
-  $$('[data-map-hotel]').forEach(b => b.onclick = () => {
-    const card = b.closest('[data-hotel]');
-    if (!card) return;
-    const q = (card.querySelector('.h-loc').value || card.querySelector('.h-name').value || '').trim();
-    if (q) window.open(mapUrl(q), '_blank', 'noopener');
-    else toast('请先填写酒店位置或名称');
+  // 酒店复制按钮
+  $$('[data-hotel-copy]').forEach(b => b.onclick = () => {
+    const id = b.dataset.hotelCopy;
+    const it = DATA.checklist.find(x => x.id === id);
+    if (!it) return;
+    const name = it.name || '（待填）';
+    const loc = it.location || '（待填）';
+    const text = name + ' ' + loc;
+    copyText(text, text);
+  });
+}
+
+// ---------------- 门票预订 ----------------
+function renderTickets() {
+  const el = $('#ticketList');
+  if (!DATA.tickets || !DATA.tickets.length) {
+    el.innerHTML = '<p class="meta">暂无门票信息。</p>'; return;
+  }
+  el.innerHTML = DATA.tickets.map(g => {
+    const doneCount = g.items.filter(x => x.done).length;
+    return `<div class="ticket-group">
+      <div class="tg-header">
+        <span class="tg-date">${esc(g.date)}</span>
+        <span class="tg-title">${esc(g.dayRef ? ('Day' + g.dayRef.replace('d','')) : '')} 门票</span>
+        <span class="tg-progress">✅ ${doneCount}/${g.items.length}</span>
+      </div>
+      ${g.items.map(item => `
+        <div class="ticket-item ${item.done ? 'done' : ''}">
+          <div class="ti-top">
+            <input type="checkbox" ${item.done ? 'checked' : ''} data-tick="${g.id}-${item.name}" />
+            <div class="ti-info">
+              <div class="ti-name"><b>${esc(item.name)}</b></div>
+              <div class="ti-price">${esc(item.price)}</div>
+              <div class="ti-channel">🔗 ${esc(item.channel)}</div>
+              <div class="ti-ahead">⏰ ${esc(item.ahead)}</div>
+              <div class="ti-tips">💡 ${esc(item.tips)}</div>
+            </div>
+          </div>
+        </div>
+      `).join('')}
+    </div>`;
+  }).join('');
+  // 绑定 checkbox
+  $$('[data-tick]').forEach(c => c.onchange = async () => {
+    const key = c.dataset.tick; // "groupId-name"
+    const idx = key.lastIndexOf('-');
+    const gid = key.substring(0, idx);
+    const nm = key.substring(idx + 1);
+    const g = DATA.tickets.find(t => t.id === gid);
+    if (g) { const item = g.items.find(i => i.name === nm); if (item) item.done = c.checked; }
+    await saveData(); renderTickets();
   });
 }
 
 // ---------------- 渲染入口 ----------------
 function renderAll() {
-  renderPlan(); renderMoney(); renderList();
+  renderPlan(); renderMoney(); renderList(); renderTickets();
 }
 
 // ---------------- 启动 ----------------
@@ -253,7 +354,6 @@ function renderAll() {
   if (CFG.SUPABASE_URL && CFG.SUPABASE_ANON_KEY && window.supabase) {
     try {
       sb = window.supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY);
-      // 验证客户端是否真的创建成功（有 auth 方法）
       if (!sb || !sb.auth) throw new Error('Supabase 客户端创建失败');
       mode = 'supabase';
       $('#loginEmail').textContent = CFG.LOGIN_EMAIL || 'travel@example.com';
@@ -269,10 +369,8 @@ function renderAll() {
       loadData();
     }
   } else if (CFG.SUPABASE_URL && CFG.SUPABASE_ANON_KEY) {
-    // 已配置云端，但 Supabase 库没加载成功（如网络拦截）
     $('#modeHint').textContent = '⚠️ 云端组件未加载';
     $('#loginErr').textContent = '云端组件加载失败，请下拉刷新页面后重试';
-    // 保留登录页，不静默进入本地模式
   } else {
     mode = 'local';
     $('#login').classList.add('hidden');

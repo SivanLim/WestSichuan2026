@@ -31,6 +31,7 @@
       <button class="tab active" data-tab="plan">行程</button>
       <button class="tab" data-tab="money">费用</button>
       <button class="tab" data-tab="list">待办清单</button>
+      <button class="tab" data-tab="tickets">门票预订</button>
     </nav>
 
     <main>
@@ -54,17 +55,17 @@
         </div>
         <form id="moneyForm" class="row-form">
           <select name="who" required>
-            <option value="胖胖">胖胖</option>
+            <option value="胖哥">胖哥</option>
             <option value="华老师">华老师</option>
           </select>
           <input name="amount" type="number" step="0.01" placeholder="金额" required />
           <input name="currency" placeholder="币种" value="¥" style="width:64px" />
           <select name="what" required>
             <option value="伙食费">伙食费</option>
-            <option value="奶茶费">奶茶费</option>
+            <option value="饮品零食费">饮品零食费</option>
             <option value="油电路费">油电路费</option>
             <option value="住宿费">住宿费</option>
-            <option value="氧气瓶">氧气瓶</option>
+            <option value="门票及玩乐项目费">门票及玩乐项目费</option>
             <option value="租车">租车</option>
             <option value="其他">其他</option>
           </select>
@@ -85,7 +86,7 @@
           <input name="text" placeholder="要带 / 要做的事" required />
           <select name="by">
             <option value="">负责人</option>
-            <option value="胖胖">胖胖</option>
+            <option value="胖哥">胖哥</option>
             <option value="Leo">Leo</option>
             <option value="华老师">华老师</option>
             <option value="AT">AT</option>
@@ -94,15 +95,23 @@
         </form>
         <div id="listBox" class="checklist"></div>
       </section>
+
+      <!-- 门票预订 -->
+      <section class="panel" id="tickets">
+        <div class="ticket-bar">
+          <span class="ticket-hint">每完成一项点勾，方便追踪购票进度 💡</span>
+        </div>
+        <div id="ticketList" class="tickets-container"></div>
+      </section>
     </main>
     <p id="modeHint" class="mode-hint"></p>
   </div>
 
   <div id="toast" class="toast"></div>
 
-  <script src="supabase.min.js?v=5"></script>
-  <script src="config.js?v=5"></script>
-  <script src="seed-data.js?v=5"></script>
-  <script src="app.js?v=5"></script>
+  <script src="supabase.min.js?v=6"></script>
+  <script src="config.js?v=6"></script>
+  <script src="seed-data.js?v=6"></script>
+  <script src="app.js?v=6"></script>
 </body>
 </html>
