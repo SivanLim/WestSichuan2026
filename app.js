@@ -31,14 +31,66 @@ function fallbackCopy(text, label) {
 }
 
 // ---------------- 数据读写 ----------------
+// 将新版 SEED_DATA 的结构更新合并到已存储的 DATA（保留用户自定义内容）
+function mergeSeedData(data) {
+  const seed = window.SEED_DATA;
+  // 合并行程：用新版 note / spots / legs 覆盖（保留用户打的 done 状态等）
+  if (seed.itinerary && data.itinerary) {
+    const seedMap = {};
+    seed.itinerary.forEach(i => { seedMap[i.id] = i; });
+    data.itinerary.forEach(item => {
+      const s = seedMap[item.id];
+      if (s) {
+        // 新版字段覆盖：note、spots、legs、sunset、weather、clothing
+        if (s.note !== undefined) item.note = s.note;
+        if (s.spots !== undefined) item.spots = s.spots;
+        if (s.legs !== undefined) item.legs = s.legs;
+        if (s.sunset !== undefined) item.sunset = s.sunset;
+        if (s.weather !== undefined) item.weather = s.weather;
+        if (s.clothing !== undefined) item.clothing = s.clothing;
+      }
+    });
+  }
+  // 合并门票：用新版 tickets 数组（保留用户 done 勾选状态）
+  if (seed.tickets && data.tickets) {
+    const seedMap = {};
+    seed.tickets.forEach(g => { seedMap[g.id] = g; });
+    data.tickets.forEach(group => {
+      const sg = seedMap[group.id];
+      if (sg && sg.items) {
+        const sgItemMap = {};
+        sg.items.forEach(it => { sgItemMap[it.name] = it; });
+        group.items.forEach(item => {
+          const si = sgItemMap[item.name];
+          if (si) {
+            // 新版字段覆盖：price/channel/ahead/tips/link/guide
+            if (si.price !== undefined) item.price = si.price;
+            if (si.channel !== undefined) item.channel = si.channel;
+            if (si.ahead !== undefined) item.ahead = si.ahead;
+            if (si.tips !== undefined) item.tips = si.tips;
+            if (si.link !== undefined) item.link = si.link;
+            if (si.guide !== undefined) item.guide = si.guide;
+          }
+        });
+        // 补充新版新增的景点项
+        const existingNames = new Set(group.items.map(x => x.name));
+        sg.items.forEach(si => {
+          if (!existingNames.has(si.name)) group.items.push(clone(si));
+        });
+      }
+    });
+  }
+}
+
 async function loadData() {
   if (mode === 'supabase') {
     const { data, error } = await sb.from('travel_data').select('data').eq('id', 1).maybeSingle();
-    if (data && data.data) DATA = data.data;
+    if (data && data.data) { DATA = data.data; mergeSeedData(DATA); await saveData(); }
     else { DATA = clone(window.SEED_DATA); await saveData(); }
   } else {
     const raw = localStorage.getItem('travel-data');
     DATA = raw ? JSON.parse(raw) : clone(window.SEED_DATA);
+    mergeSeedData(DATA);
   }
   // 兼容：旧数据缺少 tickets 字段时补上
   if (!DATA.tickets) DATA.tickets = clone(window.SEED_DATA.tickets || []);
@@ -90,13 +142,6 @@ $('#pw').addEventListener('keydown', e => { if (e.key === 'Enter') enter(); });
 $('#logoutBtn').onclick = async () => {
   if (mode === 'supabase') await sb.auth.signOut();
   location.reload();
-};
-$('#resetBtn').onclick = async () => {
-  if (!confirm('确定把全部内容（行程 / 费用 / 待办清单 / 门票预订）恢复为默认初始值吗？\n此操作会覆盖当前云端已填内容，包括之前测试乱填的数据，且无法撤销。')) return;
-  DATA = clone(window.SEED_DATA);
-  const ok = await saveData();
-  if (ok) { renderAll(); toast('已重置为默认（测试数据已清除）'); }
-  else toast('重置失败，请重试');
 };
 
 // ---------------- tabs ----------------
