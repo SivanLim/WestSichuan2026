@@ -321,7 +321,7 @@ function renderTickets() {
           <div class="ti-top">
             <input type="checkbox" ${item.done ? 'checked' : ''} data-tick="${g.id}-${item.name}" />
             <div class="ti-info">
-              <div class="ti-name"><b>${esc(item.name)}</b></div>
+              <div class="ti-name"><b>${esc(item.name)}</b><button class="copy-btn ti-copy-btn" data-tick-copy="${esc(item.name)}" title="复制名称去公众号/抖音搜索">📋</button></div>
               <div class="ti-price">${esc(item.price)}</div>
               <div class="ti-channel">🔗 ${esc(item.channel)}</div>
               <div class="ti-ahead">⏰ ${esc(item.ahead)}</div>
@@ -341,6 +341,10 @@ function renderTickets() {
     const g = DATA.tickets.find(t => t.id === gid);
     if (g) { const item = g.items.find(i => i.name === nm); if (item) item.done = c.checked; }
     await saveData(); renderTickets();
+  });
+  // 绑定门票名称复制按钮
+  $$('[data-tick-copy]').forEach(btn => btn.onclick = () => {
+    copyText(btn.dataset.tickCopy, btn.dataset.tickCopy);
   });
 }
 
