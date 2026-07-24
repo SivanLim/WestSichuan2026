@@ -145,11 +145,9 @@ function renderPlan() {
         <div class="title">${esc(i.title)} ${i.date ? '<span class="tag">' + esc(i.date) + (i.time ? ' ' + esc(i.time) : '') + '</span>' : ''}</div>
         ${i.place ? '<div class="meta">📍 ' + esc(i.place) + '</div>' : ''}
         ${i.dur ? '<span class="dur">⏱ ' + esc(i.dur) + '</span>' : ''}
-        ${i.legs && i.legs.length ? '<div class="legs">🚗 行车预估：' + i.legs.map(l => esc(l.from) + ' → ' + esc(l.to) + '：<b>' + l.km + 'km</b> · 约' + l.min + '分钟').join('；') + '</div>' : ''}
         ${i.spots && i.spots.length ? '<div class="spots">' + i.spots.map(s =>
             '<span class="spot"><b>' + esc(s.name) + '</b>' +
             '<button class="copy-btn" data-copy="' + encodeURIComponent(s.copyText || s.name) + '" title="复制名称去百度地图搜">📋 复制</button>' +
-            (s.ticket ? '<a class="spot-link ticket" href="' + esc(s.ticket) + '" target="_blank" rel="noopener">🎫 购票</a>' : '<span class="spot-free">免费</span>') +
             '</span>'
           ).join('') + '</div>' : ''}
         ${buildRouteSvg(i.legs)}
@@ -326,6 +324,8 @@ function renderTickets() {
               <div class="ti-channel">🔗 ${esc(item.channel)}</div>
               <div class="ti-ahead">⏰ ${esc(item.ahead)}</div>
               <div class="ti-tips">💡 ${esc(item.tips)}</div>
+              ${item.link ? '<a class="ti-link" href="' + esc(item.link) + '" target="_blank" rel="noopener">🎫 购票 / 官网</a>' : ''}
+              ${item.guide ? '<div class="ti-guide">📌 ' + esc(item.guide).replace(/\n/g, '<br>') + '</div>' : ''}
             </div>
           </div>
         </div>

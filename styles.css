@@ -232,6 +232,9 @@ main { padding: 14px; max-width: 720px; margin: 0 auto; }
 .ti-channel { font-size: 12px; color: #2b6cb0; word-break: break-all; margin-bottom: 2px; }
 .ti-ahead { font-size: 12px; color: #d97706; margin-bottom: 2px; }
 .ti-tips { font-size: 12px; color: #5a554c; line-height: 1.6; white-space: normal; }
+.ti-link { display: inline-block; margin-top: 6px; padding: 4px 12px; background: var(--accent); color: #fff; border-radius: 6px; font-size: 12px; text-decoration: none; }
+.ti-link:hover { opacity: .9; }
+.ti-guide { font-size: 12px; color: #4a4a4a; line-height: 1.65; background: #fbf7ef; border-left: 3px solid #e9c46a; border-radius: 0 6px 6px 0; padding: 8px 10px; margin-top: 6px; white-space: normal; }
 
 /* toast */
 .toast {
